@@ -1,60 +1,19 @@
-# pyproject.toml
-
-# ==============================================================================
-#  Build System Configuration (PEP 517)
-#
-#  This section tells 'pip' how to build your project. 'setuptools' is the
-#  most common and robust choice.
-# ==============================================================================
 [build-system]
-requires = ["setuptools>=61.0"]
+requires = ["setuptools>=64", "wheel"]
 build-backend = "setuptools.build_meta"
 
-
-# ==============================================================================
-#  Project Metadata (PEP 621)
-#
-#  This section contains all the information about your project.
-# ==============================================================================
 [project]
-name = "my-gensim-project"
+name = "simple-environment"
 version = "0.1.0"
-description = "A project demonstrating how to install and use the gensim library."
-readme = "README.md"
-requires-python = ">=3.8"
-license = { text = "MIT" }
-authors = [
-  { name = "Your Name", email = "your.email@example.com" },
-]
-classifiers = [
-    "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.8",
-    "Programming Language :: Python :: 3.9",
-    "Programming Language :: Python :: 3.10",
-    "Programming Language :: Python :: 3.11",
-    "Programming Language :: Python :: 3.12",
-]
-
-# ------------------------------------------------------------------------------
-#  Dependencies
-#
-#  This is the core of your request. List all required packages here.
-#  'pip' will automatically resolve and install them.
-# ------------------------------------------------------------------------------
+description = "Minimal environment for Jupyter Notebook (Python 3.11)."
+requires-python = ">=3.11,<3.12"
 dependencies = [
-    "gensim"
+  "notebook",
+  "ipykernel",
+  "gensim",
+  "nltk"
 ]
 
-
-# ==============================================================================
-#  Optional Dependencies (Extras)
-#
-#  These are packages needed for development, testing, etc., but not for
-#  running the core application. They can be installed with `pip install .[dev]`
-# ==============================================================================
-[project.optional-dependencies]
-dev = [
-    "pytest",
-    "ruff",
-    "black",
-]
+# 🚫 Prevent setuptools from auto-finding packages like 'backup' or 'extra'
+[tool.setuptools]
+packages = []

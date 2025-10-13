@@ -11,3 +11,8 @@ dependencies = [
   "notebook",
   "ipykernel"
 ]
+
+
+# 🚫 Prevent setuptools from auto-finding packages like 'backup' or 'extra'
+[tool.setuptools]
+packages = []
