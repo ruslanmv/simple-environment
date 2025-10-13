@@ -1,46 +1,47 @@
-# Makefile — Python 3.11 env from pyproject.toml
+# Makefile — Python 3.11 & Docker
 
 # ====================================================================================
 #  Configuration
 # ====================================================================================
 
-# Use bash for all recipes.
 SHELL := /bin/bash
-
-# .ONESHELL: ensures all lines in a recipe are executed in a single shell instance.
-# -e: exit immediately if a command fails.
-# -u: treat unset variables as an error.
-# -o pipefail: fail a pipeline if any command in it fails.
 .ONESHELL:
 .SHELLFLAGS := -eu -o pipefail -c
 
-# ?= allows overriding from the command line, e.g., `make dev PYTHON=python3.12`
+# Local Python Environment Config
 PYTHON ?= python3.11
 VENV   ?= .venv
+
+# Docker Config
+DOCKER_IMAGE ?= simple-env:latest
+DOCKER_NAME  ?= simple-env
+DOCKER_PORT  ?= 8888
 
 # Internal variables
 BIN := $(VENV)/bin
 PY  := $(BIN)/python
 PIP := $(BIN)/pip
 
-# Define all targets that are not files.
-.PHONY: help check-python check-pyproject venv install dev update test lint fmt check shell clean distclean
-
+# Declare all targets as .PHONY to avoid conflicts with file names
+.PHONY: help venv install dev update test lint fmt check shell clean distclean \
+        build-container run-container stop-container remove-container logs \
+        check-python check-pyproject
 
 # ====================================================================================
 #  Core Targets
 # ====================================================================================
 
 help: ## Show this help message
-	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z0-9_.-]+:.*?## / {printf "\033[36m%-15s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
+	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z0-9_.-]+:.*?## / {printf "\033[36m%-24s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 
-# This target uses the filesystem to avoid re-creating the venv if it exists.
-$(VENV): check-python ## Create a virtualenv if it doesn't exist
+# --- Local Python Environment ---
+
+$(VENV): check-python
 	$(PYTHON) -m venv $(VENV)
 	$(PIP) install --upgrade pip
-	@echo "✅ Created $(VENV) with $$($(PY) -V) and upgraded pip"
+	@echo "✅ Created $(VENV) with $$($(PY) -V)"
 
-venv: $(VENV) ## Ensure the virtualenv exists (alias for the above)
+venv: $(VENV) ## Ensure the virtualenv exists (alias)
 
 install: venv check-pyproject ## Install project in non-editable mode
 	$(PIP) install .
@@ -51,31 +52,27 @@ dev: venv check-pyproject ## Install project in editable mode with dev dependenc
 	@echo "✅ Dev environment ready in $(VENV)"
 
 update: venv check-pyproject ## Upgrade project and its dependencies
-	# Use -e for dev installs, otherwise standard install
 	if $(PIP) list -e | grep -q -e "^$(shell basename `pwd`)"; then \
-		echo "Project is in editable mode, upgrading with '-e .[dev]'..."; \
+		echo "Project is in editable mode, upgrading..."; \
 		$(PIP) install --upgrade -e ".[dev]"; \
 	else \
-		echo "Project is in standard mode, upgrading with '.'..."; \
+		echo "Project is in standard mode, upgrading..."; \
 		$(PIP) install --upgrade .; \
 	fi
 	@echo "✅ Project and dependencies upgraded"
 
-
-# ====================================================================================
-#  Development & QA Targets
-# ====================================================================================
+# --- Development & QA ---
 
 test: venv ## Run tests with pytest
 	@if ! command -v $(BIN)/pytest &> /dev/null; then \
-		echo "ℹ️ pytest not found. Skipping tests. (Install with dev dependencies)"; exit 0; \
+		echo "ℹ️ pytest not found. Skipping tests. (Install with 'make dev')"; exit 0; \
 	fi
 	echo "🧪 Running tests..."
 	$(BIN)/pytest
 
 lint: venv ## Check code style with ruff
 	@if ! command -v $(BIN)/ruff &> /dev/null; then \
-		echo "ℹ️ ruff not found. Skipping linting. (Install with dev dependencies)"; exit 0; \
+		echo "ℹ️ ruff not found. Skipping linting. (Install with 'make dev')"; exit 0; \
 	fi
 	echo "🔍 Linting with ruff..."
 	$(BIN)/ruff check .
@@ -84,26 +81,57 @@ fmt: venv ## Format code with ruff and black
 	@if command -v $(BIN)/ruff &> /dev/null; then \
 		echo "🎨 Formatting with ruff..."; \
 		$(BIN)/ruff format .; \
-	else \
-		echo "ℹ️ ruff not found, skipping."; \
 	fi
 	@if command -v $(BIN)/black &> /dev/null; then \
 		echo "🎨 Formatting with black..."; \
 		$(BIN)/black .; \
-	else \
-		echo "ℹ️ black not found, skipping."; \
 	fi
 
 check: lint test ## Run all checks (linting and testing)
 
+# --- Docker ---
 
-# ====================================================================================
-#  Utility Targets
-# ====================================================================================
+build-container: check-pyproject ## 🐳 Build the Docker image
+	@echo "Building image '$(DOCKER_IMAGE)'..."
+	docker build -t $(DOCKER_IMAGE) .
+	@echo "✅ Image '$(DOCKER_IMAGE)' built successfully."
+
+run-container: ## 🚀 Run or restart the container in detached mode
+	@echo "Checking container '$(DOCKER_NAME)'..."
+	@if docker ps --format '{{.Names}}' | grep -q '^$(DOCKER_NAME)$$'; then \
+		echo "ℹ️ Container is already running."; \
+	elif docker ps -a --format '{{.Names}}' | grep -q '^$(DOCKER_NAME)$$'; then \
+		echo "✅ Restarting existing container..."; \
+		docker start $(DOCKER_NAME) > /dev/null; \
+	else \
+		echo "✅ Creating and starting new container..."; \
+		docker run -d \
+			--name $(DOCKER_NAME) \
+			-p $(DOCKER_PORT):8888 \
+			-v "$$(pwd):/workspace" \
+			$(DOCKER_IMAGE) > /dev/null; \
+	fi
+	@echo "🚀 Container is up."
+	@echo "🔗 Open Jupyter at: http://localhost:$(DOCKER_PORT)"
+
+stop-container: ## 🛑 Stop the running container
+	@echo "Stopping container '$(DOCKER_NAME)'..."
+	@docker stop $(DOCKER_NAME) >/dev/null || echo "ℹ️ Container was not running."
+	@echo "✅ Container stopped."
+
+remove-container: ## 🔥 Stop and remove the container
+	@echo "Removing container '$(DOCKER_NAME)'..."
+	@docker rm -f $(DOCKER_NAME) >/dev/null || echo "ℹ️ Container did not exist."
+	@echo "✅ Container removed."
+
+logs: ## 📝 View the container's logs (Ctrl-C to exit)
+	@echo "Following logs for '$(DOCKER_NAME)'. Press Ctrl-C to exit."
+	@docker logs -f $(DOCKER_NAME)
+
+# --- Utility ---
 
 shell: venv ## Open an interactive shell in the virtualenv
 	@echo "🐍 Entering venv shell. Type 'exit' to leave."
-	@# 'exec' replaces the make process with a new shell, which is cleaner than nesting.
 	@bash --noprofile --norc -i -c "source $(VENV)/bin/activate && exec bash -i"
 
 clean: ## Remove Python build artifacts, caches, AND the virtualenv
@@ -116,7 +144,6 @@ clean: ## Remove Python build artifacts, caches, AND the virtualenv
 
 distclean: clean ## Alias for compatibility (clean already removes .venv)
 	@true
-
 
 # ====================================================================================
 #  Internal Helper Targets
