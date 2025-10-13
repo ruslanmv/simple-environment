@@ -106,15 +106,16 @@ shell: venv ## Open an interactive shell in the virtualenv
 	@# 'exec' replaces the make process with a new shell, which is cleaner than nesting.
 	@bash --noprofile --norc -i -c "source $(VENV)/bin/activate && exec bash -i"
 
-clean: ## Remove Python build artifacts and cache
-	@echo "🧹 Cleaning artifacts..."
+clean: ## Remove Python build artifacts, caches, AND the virtualenv
+	@echo "🧹 Cleaning artifacts and removing $(VENV)..."
 	@find . -type f -name "*.pyc" -delete
 	@find . -type d -name "__pycache__" -exec rm -rf {} +
 	@rm -rf .pytest_cache .ruff_cache .mypy_cache build dist *.egg-info
-
-distclean: clean ## Remove all artifacts AND the virtualenv
 	@rm -rf $(VENV)
 	@echo "🔥 Removed $(VENV) environment."
+
+distclean: clean ## Alias for compatibility (clean already removes .venv)
+	@true
 
 
 # ====================================================================================
