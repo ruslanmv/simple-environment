@@ -9,9 +9,10 @@ description = "Minimal environment for Jupyter Notebook (Python 3.11)."
 requires-python = ">=3.11,<3.12"
 dependencies = [
   "notebook",
-  "ipykernel"
+  "ipykernel",
+  "gensim",
+  "nltk"
 ]
-
 
 # 🚫 Prevent setuptools from auto-finding packages like 'backup' or 'extra'
 [tool.setuptools]
