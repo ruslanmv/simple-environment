@@ -256,15 +256,74 @@ python3.11 --version
 ```
 
 ### Windows
-1.  **Install Git for Windows** (provides Git Bash): [https://git-scm.com/download/win](https://git-scm.com/download/win)
-2.  **Install Python 3.11**: [https://www.python.org/downloads/windows/](https://www.python.org/downloads/windows/) (ensure you select "Add Python to PATH").
-3.  **Install GNU Make** (using an Admin PowerShell):
-    * With **Scoop** (recommended): `irm get.scoop.sh | iex` then `scoop install make`
-    * Or with **Chocolatey**: `Set-ExecutionPolicy Bypass -Scope Process -Force; [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072; iex ((New-Object System.Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1')); choco install make`
-4.  **Run all `make` commands inside Git Bash.** You may need to specify the Python executable:
-    ```bash
-    make install PYTHON="py -3.11"
-    ```
+### Windows
+
+1. **Install Git for Windows** (provides Git Bash): [https://git-scm.com/download/win](https://git-scm.com/download/win)
+   *Optional via Winget (no admin needed):*
+
+   ```powershell
+   winget install -e --id Git.Git
+   ```
+
+2. **Install Python 3.11**: [https://www.python.org/downloads/windows/](https://www.python.org/downloads/windows/) (ensure you select **“Add Python to PATH”**).
+   *Optional via Winget (no admin needed):*
+
+   ```powershell
+   winget install -e --id Python.Python.3.11
+   ```
+
+3. **Install GNU Make** *(pick ONE method; don’t mix package managers)*
+
+   * **Winget** *(no admin)*:
+
+     ```powershell
+     winget install -e --id GnuWin32.Make
+     ```
+   * **Scoop** *(no admin; run in a **regular** PowerShell — NOT Administrator)*:
+
+     ```powershell
+     Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned -Force
+     irm get.scoop.sh | iex
+     scoop install make
+     ```
+
+     *If you also want Git & Python via Scoop:*
+
+     ```powershell
+     scoop install git
+     scoop bucket add versions
+     scoop install python311
+     ```
+   * **Chocolatey** *(**Administrator** PowerShell required)*:
+
+     ```powershell
+     Set-ExecutionPolicy Bypass -Scope Process -Force
+     [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12
+     iwr https://community.chocolatey.org/install.ps1 -UseBasicParsing | iex
+
+     choco install -y make
+     ```
+
+     *Optional (also install Git & Python 3.11 via Chocolatey):*
+
+     ```powershell
+     choco install -y git
+     choco install -y python --version=3.11.9
+     ```
+
+   **After installing**, close and reopen your terminal so PATH refreshes, then verify:
+
+   ```powershell
+   git --version
+   py -3.11 -V
+   make --version
+   ```
+
+4. **Run all `make` commands inside Git Bash.** You may need to specify the Python executable:
+
+   ```bash
+   make install PYTHON="py -3.11"
+   ```
 </details>
 
 ---
