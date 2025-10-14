@@ -256,17 +256,24 @@ python3.11 --version
 ```
 
 ### Windows
-### Windows
+**Which terminal should I open?**
+
+* **PowerShell (regular / non-Admin):** Start → type “PowerShell” → open **Windows PowerShell** (do **not** click “Run as administrator”).
+* **PowerShell (Administrator):** Start → “PowerShell” → **Run as administrator**.
+* **Command Prompt (cmd):** Start → type “cmd” → open **Command Prompt** (non-Admin).
+* **Git Bash:** Install Git first, then open **Git Bash** from Start menu (or right-click a folder → **Open Git Bash here**).
+
+---
 
 1. **Install Git for Windows** (provides Git Bash): [https://git-scm.com/download/win](https://git-scm.com/download/win)
-   *Optional via Winget (no admin needed):*
+   *Or install with Winget from a **regular PowerShell or Command Prompt** (non-Admin):*
 
    ```powershell
    winget install -e --id Git.Git
    ```
 
 2. **Install Python 3.11**: [https://www.python.org/downloads/windows/](https://www.python.org/downloads/windows/) (ensure you select **“Add Python to PATH”**).
-   *Optional via Winget (no admin needed):*
+   *Or install with Winget from a **regular PowerShell or Command Prompt** (non-Admin):*
 
    ```powershell
    winget install -e --id Python.Python.3.11
@@ -274,12 +281,12 @@ python3.11 --version
 
 3. **Install GNU Make** *(pick ONE method; don’t mix package managers)*
 
-   * **Winget** *(no admin)*:
+   * **Winget** — run in a **regular PowerShell or Command Prompt** (non-Admin):
 
      ```powershell
      winget install -e --id GnuWin32.Make
      ```
-   * **Scoop** *(no admin; run in a **regular** PowerShell — NOT Administrator)*:
+   * **Scoop** — run **only in a regular PowerShell** (non-Admin), *not* as Administrator:
 
      ```powershell
      Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned -Force
@@ -287,14 +294,14 @@ python3.11 --version
      scoop install make
      ```
 
-     *If you also want Git & Python via Scoop:*
+     *Optional (also via Scoop in the same **regular PowerShell**):*
 
      ```powershell
      scoop install git
      scoop bucket add versions
      scoop install python311
      ```
-   * **Chocolatey** *(**Administrator** PowerShell required)*:
+   * **Chocolatey** — run in **PowerShell (Administrator)**:
 
      ```powershell
      Set-ExecutionPolicy Bypass -Scope Process -Force
@@ -304,14 +311,14 @@ python3.11 --version
      choco install -y make
      ```
 
-     *Optional (also install Git & Python 3.11 via Chocolatey):*
+     *Optional (also in **PowerShell (Administrator)**):*
 
      ```powershell
      choco install -y git
      choco install -y python --version=3.11.9
      ```
 
-   **After installing**, close and reopen your terminal so PATH refreshes, then verify:
+   **After installing**, close and reopen your terminal so PATH refreshes. Verify from a **regular PowerShell or Command Prompt**:
 
    ```powershell
    git --version
@@ -319,12 +326,15 @@ python3.11 --version
    make --version
    ```
 
-4. **Run all `make` commands inside Git Bash.** You may need to specify the Python executable:
+4. **Run all `make` commands inside Git Bash.**
+   Open **Git Bash**, `cd` to your project folder, then:
 
    ```bash
    make install PYTHON="py -3.11"
    ```
-</details>
+
+   *(If `py` isn’t found in Git Bash, try `PYTHON="python"` or `PYTHON="/c/Windows/py.exe -3.11"`.)*
+
 
 ---
 
