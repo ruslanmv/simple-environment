@@ -111,7 +111,7 @@ ifeq ($(OS),Windows_NT)
 $(VENV): check-python
 	@echo "Creating virtual environment at $(VENV)…"
 	# Kill any running python and hard-delete locked venv (if present)
-	@powershell -NoProfile -Command "taskkill /F /IM python.exe 2>$$null; Start-Sleep -Milliseconds 300; if (Test-Path '$(VENV)'){ Remove-Item -Recurse -Force '$(VENV)' -ErrorAction SilentlyContinue; Start-Sleep -Milliseconds 200 }"
+	@taskkill /F /IM python.exe 2>$$null; Start-Sleep -Milliseconds 300; if (Test-Path '$(VENV)'){ Remove-Item -Recurse -Force '$(VENV)' -ErrorAction SilentlyContinue; Start-Sleep -Milliseconds 200 }
 	# Create venv with the launcher, then upgrade pip
 	@& $(PYTHON) -m venv '$(VENV)'
 	@& '$(VENV)\Scripts\python.exe' -m pip install --upgrade pip
@@ -204,7 +204,7 @@ shell: venv ## Show how to activate the virtual environment shell
 
 clean-venv: ## Force-remove the venv (kills python.exe on Windows)
 ifeq ($(OS),Windows_NT)
-	@powershell -NoProfile -Command "taskkill /F /IM python.exe 2>$$null; Start-Sleep -Milliseconds 300; if (Test-Path '.venv'){ Remove-Item -Recurse -Force '.venv' }"
+	@taskkill /F /IM python.exe 2>$$null; Start-Sleep -Milliseconds 300; if (Test-Path '.venv'){ Remove-Item -Recurse -Force '.venv' }
 else
 	@rm -rf .venv
 endif
