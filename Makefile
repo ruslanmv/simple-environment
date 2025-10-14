@@ -1,4 +1,6 @@
-# Makefile — Python 3.11 & Docker
+# Makefile — Python 3.11 (per pyproject >=3.11,<3.12) + Docker helpers
+# Simplified: cross-platform Python check. If 3.11 isn't available, runs scripts/install.sh.
+# Note: Only the Python check was made smart/cross-platform; the rest stays minimal.
 
 # ====================================================================================
 #  Configuration
@@ -9,15 +11,17 @@ SHELL := /bin/bash
 .SHELLFLAGS := -eu -o pipefail -c
 
 # Local Python Environment Config
-PYTHON ?= python3.11
+# We dynamically read a resolved command (e.g., "py -3.11") from .python_cmd if present.
+PYTHON_CMD_FILE ?= .python_cmd
+PYTHON ?= $(if $(wildcard $(PYTHON_CMD_FILE)),$(shell cat $(PYTHON_CMD_FILE)),python3.11)
 VENV   ?= .venv
 
-# Docker Config
+# Docker Config (optional helpers unchanged)
 DOCKER_IMAGE ?= simple-env:latest
 DOCKER_NAME  ?= simple-env
 DOCKER_PORT  ?= 8888
 
-# Internal variables
+# Internal variables (Unix-style venv layout; Windows users may prefer editing these)
 BIN := $(VENV)/bin
 PY  := $(BIN)/python
 PIP := $(BIN)/pip
@@ -25,7 +29,7 @@ PIP := $(BIN)/pip
 # Declare all targets as .PHONY to avoid conflicts with file names
 .PHONY: help venv install dev update test lint fmt check shell clean distclean \
         build-container run-container stop-container remove-container logs \
-        check-python check-pyproject
+        check-python check-pyproject python-version
 
 # ====================================================================================
 #  Core Targets
@@ -89,7 +93,7 @@ fmt: venv ## Format code with ruff and black
 
 check: lint test ## Run all checks (linting and testing)
 
-# --- Docker ---
+# --- Docker (optional helpers) ---
 
 build-container: check-pyproject ## 🐳 Build the Docker image
 	@echo "Building image '$(DOCKER_IMAGE)'..."
@@ -130,6 +134,9 @@ logs: ## 📝 View the container's logs (Ctrl-C to exit)
 
 # --- Utility ---
 
+python-version: check-python ## Show resolved Python interpreter and version
+	@echo "🐍 Using: $(PYTHON)"; $(PYTHON) -V
+
 shell: venv ## Open an interactive shell in the virtualenv
 	@echo "🐍 Entering venv shell. Type 'exit' to leave."
 	@bash --noprofile --norc -i -c "source $(VENV)/bin/activate && exec bash -i"
@@ -139,7 +146,7 @@ clean: ## Remove Python build artifacts, caches, AND the virtualenv
 	@find . -type f -name "*.pyc" -delete
 	@find . -type d -name "__pycache__" -exec rm -rf {} +
 	@rm -rf .pytest_cache .ruff_cache .mypy_cache build dist *.egg-info
-	@rm -rf $(VENV)
+	@rm -rf $(VENV) $(PYTHON_CMD_FILE)
 	@echo "🔥 Removed $(VENV) environment."
 
 distclean: clean ## Alias for compatibility (clean already removes .venv)
@@ -149,10 +156,31 @@ distclean: clean ## Alias for compatibility (clean already removes .venv)
 #  Internal Helper Targets
 # ====================================================================================
 
+# Cross-platform: verify a Python 3.11 command exists.
+# If not, run the installer, then re-check. On Windows this will also accept "py -3.11".
 check-python:
-	@command -v $(PYTHON) >/dev/null 2>&1 || { \
-		echo "❌ $(PYTHON) not found. Install it or override, e.g., 'make PYTHON=/path/to/python'"; \
-		exit 1; }
+	@set -e; \
+	echo "🔎 Resolving a Python that satisfies >=3.11,<3.12 (i.e., 3.11.x)"; \
+	resolve() { \
+	  for c in "$(PYTHON)" python3.11 python3 python; do \
+	    [ -n "$$c" ] || continue; \
+	    if command -v $$c >/dev/null 2>&1 && $$c -c 'import sys; v=sys.version_info; raise SystemExit(0 if (v[0]==3 and v[1]==11) else 1)'; then \
+	      echo $$c; return 0; \
+	    fi; \
+	  done; \
+	  if command -v py >/dev/null 2>&1 && py -3.11 -c "import sys" >/dev/null 2>&1; then \
+	    echo "py -3.11"; return 0; \
+	  fi; \
+	  return 1; \
+	}; \
+	if ! CMD="$$(resolve)"; then \
+	  echo "❗ Python 3.11 not found. Running installer: scripts/install.sh"; \
+	  bash scripts/install.sh; \
+	  CMD="$$(resolve)" || { echo "❌ Still no Python 3.11 after installation."; exit 1; }; \
+	fi; \
+	echo "$$CMD" > "$(PYTHON_CMD_FILE)"; \
+	echo "✅ Using Python command: $$CMD"; \
+	$$CMD -V
 
 check-pyproject:
 	@test -f pyproject.toml || { echo "❌ pyproject.toml not found in this directory."; exit 1; }
