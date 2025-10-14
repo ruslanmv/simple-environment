@@ -55,8 +55,8 @@ DOCKER_NAME  ?= simple-env
 DOCKER_PORT  ?= 8888
 
 .PHONY: help venv install dev uv-install update test lint fmt check shell clean distclean \
-        clean-venv build-container run-container stop-container remove-container logs \
-        check-python check-pyproject check-uv python-version
+	clean-venv build-container run-container stop-container remove-container logs \
+	check-python check-pyproject check-uv python-version
 
 # =============================================================================
 #  Helper Scripts (exported env vars; expanded by the shell)
@@ -69,11 +69,11 @@ print('Usage: make <target> [OPTIONS...]\\n')
 print('Available targets:\\n')
 mf = '$(firstword $(MAKEFILE_LIST))'
 with io.open(mf, 'r', encoding='utf-8', errors='ignore') as f:
-    for line in f:
-        m = re.match(r'^([a-zA-Z0-9_.-]+):.*?## (.*)$$', line)
-        if m:
-            target, help_text = m.groups()
-            print('  {0:<22} {1}'.format(target, help_text))
+	for line in f:
+		m = re.match(r'^([a-zA-Z0-9_.-]+):.*?## (.*)$$', line)
+		if m:
+			target, help_text = m.groups()
+			print('  {0:<22} {1}'.format(target, help_text))
 endef
 
 export CLEAN_SCRIPT
@@ -82,15 +82,15 @@ import glob, os, shutil, sys
 patterns = ['*.pyc', '*.pyo', '*~', '*.egg-info', '__pycache__', 'build', 'dist', '.mypy_cache', '.pytest_cache', '.ruff_cache']
 to_remove = set()
 for p in patterns:
-    to_remove.update(glob.glob('**/' + p, recursive=True))
+	to_remove.update(glob.glob('**/' + p, recursive=True))
 for path in sorted(to_remove, key=len, reverse=True):
-    try:
-        if os.path.isfile(path) or os.path.islink(path):
-            os.remove(path)
-        elif os.path.isdir(path):
-            shutil.rmtree(path)
-    except OSError as e:
-        print('Error removing {0}: {1}'.format(path, e), file=sys.stderr)
+	try:
+		if os.path.isfile(path) or os.path.islink(path):
+			os.remove(path)
+		elif os.path.isdir(path):
+			shutil.rmtree(path)
+	except OSError as e:
+		print('Error removing {0}: {1}'.format(path, e), file=sys.stderr)
 endef
 
 # =============================================================================
@@ -110,9 +110,7 @@ endif
 ifeq ($(OS),Windows_NT)
 $(VENV): check-python
 	@echo "Creating virtual environment at $(VENV)…"
-	# Kill any running python and hard-delete locked venv (if present)
 	@powershell -NoProfile -Command "taskkill /F /IM python.exe 2>$$null; Start-Sleep -Milliseconds 300; if (Test-Path '$(VENV)'){ Remove-Item -Recurse -Force '$(VENV)' -ErrorAction SilentlyContinue; Start-Sleep -Milliseconds 200 }"
-	# Create venv with the launcher, then upgrade pip
 	@& $(PYTHON) -m venv '$(VENV)'
 	@& '$(VENV)\Scripts\python.exe' -m pip install --upgrade pip
 	@& '$(VENV)\Scripts\python.exe' -V | % { "✅ Created $(VENV) with $$_" }
@@ -240,27 +238,17 @@ distclean: clean ## Alias for clean
 ifeq ($(OS),Windows_NT)
 check-python:
 	@echo "Checking for a Python 3.11 interpreter..."
-	@& $(PYTHON) -c "import sys; sys.exit(0 if sys.version_info[:2]==(3,11) else 1)" 2> $(NULL_DEVICE); if ($$LASTEXITCODE -ne 0) { \
-		echo "Error: '$(PYTHON)' is not Python 3.11."; \
-		echo "Please install Python 3.11 and add it to your PATH,"; \
-		echo 'or specify the command via make install PYTHON=\"py -3.11\"'; \
-		exit 1; \
-	}
+	@& $(PYTHON) -c "import sys; sys.exit(0 if sys.version_info[:2]==(3,11) else 1)" 2> $(NULL_DEVICE); if ($$LASTEXITCODE -ne 0) { echo "Error: '$(PYTHON)' is not Python 3.11."; echo "Please install Python 3.11 and add it to your PATH,"; echo 'or specify the command via make install PYTHON=\"py -3.11\"'; exit 1; }
 	@echo "Found Python 3.11:"
 	@& $(PYTHON) -V
 
 check-pyproject:
-	@& $(PYTHON) -c "import os,sys; sys.exit(0 if os.path.exists('pyproject.toml') else 1)" 2> $(NULL_DEVICE); if ($$LASTEXITCODE -ne 0) { \
-		echo "Error: pyproject.toml not found in this directory."; \
-		exit 1; \
-	}
+	@& $(PYTHON) -c "import os,sys; sys.exit(0 if os.path.exists('pyproject.toml') else 1)" 2> $(NULL_DEVICE); if ($$LASTEXITCODE -ne 0) { echo "Error: pyproject.toml not found in this directory."; exit 1; }
 
-check-uv:
-	@Get-Command uv -ErrorAction SilentlyContinue > $(NULL_DEVICE); if ($$LASTEXITCODE -ne 0) { \
-		echo "Error: 'uv' command not found."; \
-		echo "Please install uv: irm https://astral.sh/uv/install.ps1 | iex"; \
-		exit 1; \
-	}
+check-uv: ## Check for uv and install it if missing
+	@echo "Checking for uv..."
+	@Get-Command uv -ErrorAction SilentlyContinue > $(NULL_DEVICE); if ($$LASTEXITCODE -ne 0) { echo "Info: 'uv' not found. Attempting to install it now..."; irm https://astral.sh/uv/install.ps1 | iex; }
+	@echo "✅ uv is available."
 else
 check-python:
 	@echo "Checking for a Python 3.11 interpreter..."
@@ -279,10 +267,11 @@ check-pyproject:
 		exit 1; \
 	)
 
-check-uv:
+check-uv: ## Check for uv and install it if missing
+	@echo "Checking for uv..."
 	@command -v uv >$(NULL_DEVICE) 2>&1 || ( \
-		echo "Error: 'uv' command not found."; \
-		echo "Please install uv: curl -LsSf https://astral.sh/uv/install.sh | sh"; \
-		exit 1; \
+		echo "Info: 'uv' not found. Attempting to install it now..."; \
+		curl -LsSf https://astral.sh/uv/install.sh | sh; \
 	)
+	@echo "✅ uv is available."
 endif
