@@ -105,7 +105,7 @@ help: ## Show this help message
 $(VENV): check-python
 	@echo Creating virtual environment in $(VENV)...
 	@$(PYTHON) -m venv $(VENV)
-	@$(PIP_EXE) install --upgrade pip
+	@$(PY_EXE) -m pip install --upgrade pip
 	@echo Created $(VENV) with $$($(PY_EXE) -V)
 
 venv: $(VENV) ## Create the virtual environment if it does not exist
@@ -208,6 +208,12 @@ check-python:
 	}
 	@echo Found Python 3.11:
 	@& $(PYTHON) -V
+
+check-pyproject:
+	@& $(PYTHON) -c "import os,sys; sys.exit(0 if os.path.exists('pyproject.toml') else 1)" 2> $(NULL_DEVICE); if ($$LASTEXITCODE -ne 0) { \
+		echo "Error: pyproject.toml not found in this directory."; \
+		exit 1; \
+	}
 else
 check-python:
 	@echo Checking for a Python 3.11 interpreter...
@@ -219,10 +225,10 @@ check-python:
 	)
 	@echo Found Python 3.11:
 	@$(PYTHON) -V
-endif
 
 check-pyproject:
 	@$(PYTHON) -c "import os,sys; sys.exit(0 if os.path.exists('pyproject.toml') else 1)" || ( \
 		echo "Error: pyproject.toml not found in this directory."; \
 		exit 1; \
 	)
+endif
