@@ -256,86 +256,162 @@ python3.11 --version
 ```
 
 ### Windows
-### Windows
+#### 🖥️ First, Understand Your Terminals
 
-**Which terminal should I open?**
+Using the correct command-line tool is crucial. Using the wrong one (especially **Admin** vs. **non-Admin**) is the most common source of installation errors.
 
-* **PowerShell (regular / non-Admin):** Start → type “PowerShell” → open **Windows PowerShell** (do **not** click “Run as administrator”).
-* **PowerShell (Administrator):** Start → “PowerShell” → **Run as administrator**.
-* **Command Prompt (cmd):** Start → type “cmd” → open **Command Prompt** (non-Admin).
-* **Git Bash:** Install Git first, then open **Git Bash** from Start menu (or right-click a folder → **Open Git Bash here**).
+  * **Windows PowerShell (Regular)**
 
----
+      * This is your standard, everyday terminal. It operates with your user's permissions.
+      * **How to open:** Start Menu → type `PowerShell` → click **Windows PowerShell**.
+      * **Prompt looks like:** `PS C:\Users\YourUsername>`
 
-1. **Install Git for Windows** (provides Git Bash): [https://git-scm.com/download/win](https://git-scm.com/download/win)
-   *Or install with Winget from a **regular PowerShell or Command Prompt** (non-Admin):*
+  * **Windows PowerShell (Administrator)** 🛡️
 
-   ```powershell
-   winget install -e --id Git.Git
-   ```
+      * This is an elevated terminal with system-wide permissions. It's needed for tasks that modify the entire system, like installing Chocolatey.
+      * **How to open:** Start Menu → type `PowerShell` → right-click **Windows PowerShell** → select **Run as administrator**.
+      * **Prompt looks like:** `PS C:\WINDOWS\system32>`
 
-2. **Install Python 3.11**: [https://www.python.org/downloads/windows/](https://www.python.org/downloads/windows/) (ensure you select **“Add Python to PATH”**).
-   *Or install with Winget from a **regular PowerShell or Command Prompt** (non-Admin):*
+  * **Git Bash**
 
-   ```powershell
-   winget install -e --id Python.Python.3.11
-   ```
+      * This terminal provides a Unix-like environment on Windows and is the best place to run `make` commands. It's included when you install Git.
+      * **How to open:** Start Menu → type `Git Bash` → click **Git Bash**.
 
-3. **Install GNU Make** *(pick ONE method; don’t mix package managers)*
+-----
 
-   * **Winget** — run in a **regular PowerShell or Command Prompt** (non-Admin):
+### ✅ Step 1: Install Git and Python
 
-     ```powershell
-     winget install -e --id GnuWin32.Make
-     ```
-   * **Scoop** — run **only in a regular PowerShell** (non-Admin), *not* as Administrator:
+You can install these tools using the recommended `winget` command or by downloading them manually.
 
-     ```powershell
-     Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned -Force
-     irm get.scoop.sh | iex
-     scoop install make
-     ```
+#### Method 1: Using Winget (Recommended)
 
-     *Optional (also via Scoop in the same **regular PowerShell**):*
+**In a REGULAR PowerShell, run:**
 
-     ```powershell
-     scoop install git
-     scoop bucket add versions
-     scoop install python311
-     ```
-   * **Chocolatey** — run in **PowerShell (Administrator)**:
+```powershell
+# Install Git (which includes Git Bash)
+winget install -e --id Git.Git
 
-     ```powershell
-     Set-ExecutionPolicy Bypass -Scope Process -Force
-     [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12
-     iwr https://community.chocolatey.org/install.ps1 -UseBasicParsing | iex
+# Install Python 3.11
+winget install -e --id Python.Python.3.11
+```
 
-     choco install -y make
-     ```
+#### Method 2: Manual Installation
 
-     *Optional (also in **PowerShell (Administrator)**):*
+1.  **Install Git for Windows:** Download and run the installer from [https://git-scm.com/download/win](https://git-scm.com/download/win).
+2.  **Install Python 3.11:** Download and run the installer from [https://www.python.org/downloads/windows/](https://www.python.org/downloads/windows/).
+    > **Important:** During installation, make sure to check the box that says **“Add Python to PATH”**.
 
-     ```powershell
-     choco install -y git
-     choco install -y python --version=3.11.9
-     ```
+-----
 
-   **After installing**, close and reopen your terminal so PATH refreshes. Verify from a **regular PowerShell or Command Prompt**:
+### ✅ Step 2: Install GNU Make (Choose ONLY ONE Method)
 
-   ```powershell
-   git --version
-   py -3.11 -V
-   make --version
-   ```
+Pick the package manager you prefer. **Do not mix them.**
 
-4. **Run all `make` commands inside Git Bash.**
-   Open **Git Bash**, `cd` to your project folder, then:
+-----
 
-   ```bash
-   make install PYTHON="py -3.11"
-   ```
+#### Method A: Using Scoop (Recommended for User-Level Installs)
 
-   *(If `py` isn’t found in Git Bash, try `PYTHON="python"` or `PYTHON="/c/Windows/py.exe -3.11"`.)*
+**Important:** Scoop **must** be installed from a **REGULAR PowerShell** window. If you use an Admin window, the installation will fail with an "Abort" message.
+
+**In a REGULAR PowerShell, run these commands one by one:**
+
+```powershell
+# 1. Allow local scripts to run
+Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned -Force
+```
+
+```powershell
+# 2. Install Scoop
+irm get.scoop.sh | iex
+```
+
+```powershell
+# 3. Use Scoop to install Make
+scoop install make
+```
+
+*Optional (also via Scoop in the same **regular PowerShell**):*
+
+```powershell
+# You can also install Git and Python with Scoop
+scoop install git
+scoop bucket add versions
+scoop install python311
+```
+
+-----
+
+#### Method B: Using Chocolatey (For System-Wide Installs)
+
+**Important:** Chocolatey **must** be installed from an **ADMINISTRATOR PowerShell** window.
+
+**In an ADMINISTRATOR PowerShell 🛡️, run this command:**
+
+```powershell
+# 1. Allow scripts, set security protocol, and install Chocolatey
+Set-ExecutionPolicy Bypass -Scope Process -Force; [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072; iwr https://community.chocolatey.org/install.ps1 -UseBasicParsing | iex
+```
+
+> After installing, **close the Admin window and open a new one** to continue.
+
+**In a new ADMINISTRATOR PowerShell 🛡️, run:**
+
+```powershell
+# 2. Use Chocolatey to install Make
+choco install make -y
+```
+
+*Optional (also in **PowerShell (Administrator)**):*
+
+```powershell
+# You can also install Git and Python with Chocolatey
+choco install git -y
+choco install python --version=3.11.9 -y
+```
+
+-----
+
+#### Method C: Using Winget (Built-in Windows Package Manager)
+
+This is often the simplest method if you don't need other features from Scoop or Chocolatey.
+
+**In a REGULAR PowerShell, run:**
+
+```powershell
+# Use Winget to install Make
+winget install -e --id GnuWin32.Make
+```
+
+-----
+
+### ✅ Step 3: Verify Your Installation
+
+**After installing**, completely close and reopen your terminal to ensure the system's PATH variable is updated.
+
+**In a new REGULAR PowerShell, run:**
+
+```powershell
+# Check versions to confirm installation was successful
+git --version
+py -3.11 -V
+make --version
+```
+
+If any of these commands fail with a "not recognized" error, it means something wasn't installed correctly or isn't in your PATH. Revisit the steps.
+
+-----
+
+### ✅ Step 4: Run `make` Commands in Git Bash
+
+The `make` command works best in a Unix-like environment. Always use **Git Bash** to run your project's `Makefile`.
+
+1.  Navigate to your project folder in File Explorer.
+2.  Right-click inside the folder and select **Open Git Bash here**.
+3.  **In the Git Bash terminal that appears, run your command:**
+    ```bash
+    make install PYTHON="py -3.11"
+    ```
+    *(If `py` isn’t found in Git Bash, try `PYTHON="python"` or `PYTHON="/c/Windows/py.exe -3.11"`.)*
 
 </details>
 
