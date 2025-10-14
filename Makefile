@@ -102,11 +102,30 @@ help: ## Show this help message
 
 # --- Local Python Environment ---
 
-$(VENV): check-python
-	@echo Creating virtual environment in $(VENV)...
-	@$(PYTHON) -m venv $(VENV)
-	@$(PY_EXE) -m pip install --upgrade pip
-	@echo Created $(VENV) with $$($(PY_EXE) -V)
+ifeq ($(OS),Windows_NT)
+$(VENV): | check-python
+	@if (Test-Path "$(PY_EXE)") { \
+		Write-Host "Virtual environment already exists: $(VENV)"; \
+	} else { \
+		if ($$env:VIRTUAL_ENV -and (Resolve-Path $$env:VIRTUAL_ENV) -eq (Resolve-Path "$(VENV)")) { \
+			Write-Error "The current shell is using $(VENV). Run 'deactivate' and retry."; exit 1; \
+		} ;\
+		Write-Host "Creating virtual environment in $(VENV)..."; \
+		& $(PYTHON) -m venv "$(VENV)"; \
+		& "$(PIP_EXE)" install --upgrade pip; \
+		Write-Host ("Created $(VENV) with " + (& "$(PY_EXE)" -V)); \
+	}
+else
+$(VENV): | check-python
+	@if [ -x "$(PY_EXE)" ] || [ -f "$(PY_EXE)" ]; then \
+		echo "Virtual environment already exists: $(VENV)"; \
+	else \
+		echo "Creating virtual environment in $(VENV)..."; \
+		"$(PYTHON)" -m venv "$(VENV)"; \
+		"$(PIP_EXE)" install --upgrade pip; \
+		echo "Created $(VENV) with $$($(PY_EXE) -V)"; \
+	fi
+endif
 
 venv: $(VENV) ## Create the virtual environment if it does not exist
 
