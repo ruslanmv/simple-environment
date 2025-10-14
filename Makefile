@@ -1,186 +1,226 @@
-# Makefile — Python 3.11 (per pyproject >=3.11,<3.12) + Docker helpers
-# Simplified: cross-platform Python check. If 3.11 isn't available, runs scripts/install.sh.
-# Note: Only the Python check was made smart/cross-platform; the rest stays minimal.
+# Makefile - Cross-Platform for Python 3.11
+# Works on Windows (PowerShell/CMD/Git Bash) and Unix-like systems (Linux/macOS).
 
-# ====================================================================================
-#  Configuration
-# ====================================================================================
+# =============================================================================
+#  Configuration & Cross-Platform Setup
+# =============================================================================
 
-SHELL := /bin/bash
-.ONESHELL:
-.SHELLFLAGS := -eu -o pipefail -c
+.DEFAULT_GOAL := help
 
-# Local Python Environment Config
-# We dynamically read a resolved command (e.g., "py -3.11") from .python_cmd if present.
-PYTHON_CMD_FILE ?= .python_cmd
-PYTHON ?= $(if $(wildcard $(PYTHON_CMD_FILE)),$(shell cat $(PYTHON_CMD_FILE)),python3.11)
+# --- User-Configurable Variables ---
+PYTHON ?= python3.11
 VENV   ?= .venv
 
-# Docker Config (optional helpers unchanged)
+# --- OS Detection for Paths and Commands ---
+ifeq ($(OS),Windows_NT)
+# Windows settings (PowerShell-safe)
+PY_SUFFIX      := .exe
+BIN_DIR        := Scripts
+ACTIVATE       := $(VENV)\$(BIN_DIR)\activate
+NULL_DEVICE    := $$null
+RM             := Remove-Item -Force -ErrorAction SilentlyContinue
+RMDIR          := Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
+SHELL          := powershell.exe
+.SHELLFLAGS    := -NoProfile -ExecutionPolicy Bypass -Command
+# Reference to environment variables for PowerShell
+ENVREF         := $$env:
+# Docker volume source for PS (use the .Path of $PWD)
+MOUNT_SRC      := "$$PWD.Path"
+else
+# Unix/Linux/macOS settings
+PY_SUFFIX      :=
+BIN_DIR        := bin
+ACTIVATE       := . $(VENV)/$(BIN_DIR)/activate
+NULL_DEVICE    := /dev/null
+RM             := rm -f
+RMDIR          := rm -rf
+SHELL          := /bin/bash
+.ONESHELL:
+.SHELLFLAGS    := -eu -o pipefail -c
+# Reference to environment variables for POSIX sh/bash
+ENVREF         := $$
+# Docker volume source for POSIX shells
+MOUNT_SRC      := "$$(pwd)"
+endif
+
+# --- Derived Variables ---
+PY_EXE  := $(VENV)/$(BIN_DIR)/python$(PY_SUFFIX)
+PIP_EXE := $(VENV)/$(BIN_DIR)/pip$(PY_SUFFIX)
+
+# Docker Config (optional)
 DOCKER_IMAGE ?= simple-env:latest
 DOCKER_NAME  ?= simple-env
 DOCKER_PORT  ?= 8888
 
-# Internal variables (Unix-style venv layout; Windows users may prefer editing these)
-BIN := $(VENV)/bin
-PY  := $(BIN)/python
-PIP := $(BIN)/pip
-
-# Declare all targets as .PHONY to avoid conflicts with file names
 .PHONY: help venv install dev update test lint fmt check shell clean distclean \
         build-container run-container stop-container remove-container logs \
         check-python check-pyproject python-version
 
-# ====================================================================================
+# =============================================================================
+#  Helper Scripts (exported env vars; expanded by the shell)
+# =============================================================================
+
+export HELP_SCRIPT
+define HELP_SCRIPT
+import re, sys, io
+print('Usage: make <target> [OPTIONS...]\\n')
+print('Available targets:\\n')
+mf = '$(firstword $(MAKEFILE_LIST))'
+with io.open(mf, 'r', encoding='utf-8', errors='ignore') as f:
+    for line in f:
+        m = re.match(r'^([a-zA-Z0-9_.-]+):.*?## (.*)$$', line)
+        if m:
+            target, help_text = m.groups()
+            print('  {0:<22} {1}'.format(target, help_text))
+endef
+
+export CLEAN_SCRIPT
+define CLEAN_SCRIPT
+import glob, os, shutil, sys
+patterns = ['*.pyc', '*.pyo', '*~', '*.egg-info', '__pycache__', 'build', 'dist', '.mypy_cache', '.pytest_cache', '.ruff_cache']
+to_remove = set()
+for p in patterns:
+    to_remove.update(glob.glob('**/' + p, recursive=True))
+for path in sorted(to_remove, key=len, reverse=True):
+    try:
+        if os.path.isfile(path) or os.path.islink(path):
+            os.remove(path)
+        elif os.path.isdir(path):
+            shutil.rmtree(path)
+    except OSError as e:
+        print('Error removing {0}: {1}'.format(path, e), file=sys.stderr)
+endef
+
+# =============================================================================
 #  Core Targets
-# ====================================================================================
+# =============================================================================
 
 help: ## Show this help message
-	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z0-9_.-]+:.*?## / {printf "\033[36m%-24s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
+	@$(PYTHON) -X utf8 -c "$(ENVREF)HELP_SCRIPT"
 
 # --- Local Python Environment ---
 
 $(VENV): check-python
-	$(PYTHON) -m venv $(VENV)
-	$(PIP) install --upgrade pip
-	@echo "✅ Created $(VENV) with $$($(PY) -V)"
+	@echo Creating virtual environment in $(VENV)...
+	@$(PYTHON) -m venv $(VENV)
+	@$(PIP_EXE) install --upgrade pip
+	@echo Created $(VENV) with $$($(PY_EXE) -V)
 
-venv: $(VENV) ## Ensure the virtualenv exists (alias)
+venv: $(VENV) ## Create the virtual environment if it does not exist
 
 install: venv check-pyproject ## Install project in non-editable mode
-	$(PIP) install .
-	@echo "✅ Installed project into $(VENV)"
+	@$(PIP_EXE) install .
+	@echo Installed project into $(VENV)
 
 dev: venv check-pyproject ## Install project in editable mode with dev dependencies
-	$(PIP) install -e ".[dev]"
-	@echo "✅ Dev environment ready in $(VENV)"
+	@$(PIP_EXE) install -e ".[dev]"
+	@echo Dev environment ready in $(VENV)
 
 update: venv check-pyproject ## Upgrade project and its dependencies
-	if $(PIP) list -e | grep -q -e "^$(shell basename `pwd`)"; then \
-		echo "Project is in editable mode, upgrading..."; \
-		$(PIP) install --upgrade -e ".[dev]"; \
-	else \
-		echo "Project is in standard mode, upgrading..."; \
-		$(PIP) install --upgrade .; \
-	fi
-	@echo "✅ Project and dependencies upgraded"
+	@$(PIP_EXE) install --upgrade -e ".[dev]"
+	@echo Project and dependencies upgraded
 
 # --- Development & QA ---
 
 test: venv ## Run tests with pytest
-	@if ! command -v $(BIN)/pytest &> /dev/null; then \
-		echo "ℹ️ pytest not found. Skipping tests. (Install with 'make dev')"; exit 0; \
-	fi
-	echo "🧪 Running tests..."
-	$(BIN)/pytest
+	@echo Running tests...
+	@$(PY_EXE) -m pytest
 
 lint: venv ## Check code style with ruff
-	@if ! command -v $(BIN)/ruff &> /dev/null; then \
-		echo "ℹ️ ruff not found. Skipping linting. (Install with 'make dev')"; exit 0; \
-	fi
-	echo "🔍 Linting with ruff..."
-	$(BIN)/ruff check .
+	@echo Linting with ruff...
+	@$(PY_EXE) -m ruff check .
 
-fmt: venv ## Format code with ruff and black
-	@if command -v $(BIN)/ruff &> /dev/null; then \
-		echo "🎨 Formatting with ruff..."; \
-		$(BIN)/ruff format .; \
-	fi
-	@if command -v $(BIN)/black &> /dev/null; then \
-		echo "🎨 Formatting with black..."; \
-		$(BIN)/black .; \
-	fi
+fmt: venv ## Format code with ruff
+	@echo Formatting with ruff...
+	@$(PY_EXE) -m ruff format .
 
 check: lint test ## Run all checks (linting and testing)
 
 # --- Docker (optional helpers) ---
 
-build-container: check-pyproject ## 🐳 Build the Docker image
-	@echo "Building image '$(DOCKER_IMAGE)'..."
-	docker build -t $(DOCKER_IMAGE) .
-	@echo "✅ Image '$(DOCKER_IMAGE)' built successfully."
+build-container: check-pyproject ## Build the Docker image
+	@echo Building image '$(DOCKER_IMAGE)'...
+	@docker build -t $(DOCKER_IMAGE) .
 
-run-container: ## 🚀 Run or restart the container in detached mode
-	@echo "Checking container '$(DOCKER_NAME)'..."
-	@if docker ps --format '{{.Names}}' | grep -q '^$(DOCKER_NAME)$$'; then \
-		echo "ℹ️ Container is already running."; \
-	elif docker ps -a --format '{{.Names}}' | grep -q '^$(DOCKER_NAME)$$'; then \
-		echo "✅ Restarting existing container..."; \
-		docker start $(DOCKER_NAME) > /dev/null; \
-	else \
-		echo "✅ Creating and starting new container..."; \
-		docker run -d \
-			--name $(DOCKER_NAME) \
-			-p $(DOCKER_PORT):8888 \
-			-v "$$(pwd):/workspace" \
-			$(DOCKER_IMAGE) > /dev/null; \
-	fi
-	@echo "🚀 Container is up."
-	@echo "🔗 Open Jupyter at: http://localhost:$(DOCKER_PORT)"
+# Windows-safe fallback (PowerShell 5): run, and if it fails, start
+ifeq ($(OS),Windows_NT)
+run-container: ## Run or restart the container in detached mode
+	@docker run -d --name $(DOCKER_NAME) -p $(DOCKER_PORT):8888 -v $(MOUNT_SRC):/workspace $(DOCKER_IMAGE) > $(NULL_DEVICE) 2> $(NULL_DEVICE); if ($$LASTEXITCODE -ne 0) { docker start $(DOCKER_NAME) > $(NULL_DEVICE) 2> $(NULL_DEVICE) }
+	@echo Container is up at http://localhost:$(DOCKER_PORT)
 
-stop-container: ## 🛑 Stop the running container
-	@echo "Stopping container '$(DOCKER_NAME)'..."
-	@docker stop $(DOCKER_NAME) >/dev/null || echo "ℹ️ Container was not running."
-	@echo "✅ Container stopped."
+stop-container: ## Stop the running container
+	@docker stop $(DOCKER_NAME) > $(NULL_DEVICE) 2> $(NULL_DEVICE); if ($$LASTEXITCODE -ne 0) { echo "Info: container was not running." }
 
-remove-container: ## 🔥 Stop and remove the container
-	@echo "Removing container '$(DOCKER_NAME)'..."
-	@docker rm -f $(DOCKER_NAME) >/dev/null || echo "ℹ️ Container did not exist."
-	@echo "✅ Container removed."
+remove-container: stop-container ## Stop and remove the container
+	@docker rm $(DOCKER_NAME) > $(NULL_DEVICE) 2> $(NULL_DEVICE); if ($$LASTEXITCODE -ne 0) { echo "Info: container did not exist." }
+else
+run-container: ## Run or restart the container in detached mode
+	@docker run -d --name $(DOCKER_NAME) -p $(DOCKER_PORT):8888 -v $(MOUNT_SRC):/workspace $(DOCKER_IMAGE) > $(NULL_DEVICE) || docker start $(DOCKER_NAME)
+	@echo Container is up at http://localhost:$(DOCKER_PORT)
 
-logs: ## 📝 View the container's logs (Ctrl-C to exit)
-	@echo "Following logs for '$(DOCKER_NAME)'. Press Ctrl-C to exit."
+stop-container: ## Stop the running container
+	@docker stop $(DOCKER_NAME) >$(NULL_DEVICE) 2>&1 || echo "Info: container was not running."
+
+remove-container: stop-container ## Stop and remove the container
+	@docker rm $(DOCKER_NAME) >$(NULL_DEVICE) 2>&1 || echo "Info: container did not exist."
+endif
+
+logs: ## View the container logs (Ctrl-C to exit)
 	@docker logs -f $(DOCKER_NAME)
 
 # --- Utility ---
 
 python-version: check-python ## Show resolved Python interpreter and version
-	@echo "🐍 Using: $(PYTHON)"; $(PYTHON) -V
+	@echo Using: $(PYTHON)
+	@$(PYTHON) -V
 
-shell: venv ## Open an interactive shell in the virtualenv
-	@echo "🐍 Entering venv shell. Type 'exit' to leave."
-	@bash --noprofile --norc -i -c "source $(VENV)/bin/activate && exec bash -i"
+shell: venv ## Show how to activate the virtual environment shell
+	@echo Virtual environment is ready.
+	@echo To activate it, run:
+	@echo "  On Windows (CMD/PowerShell): .\\$(subst /,\,$(ACTIVATE))"
+	@echo "  On Unix (Linux/macOS/Git Bash): $(ACTIVATE)"
 
-clean: ## Remove Python build artifacts, caches, AND the virtualenv
-	@echo "🧹 Cleaning artifacts and removing $(VENV)..."
-	@find . -type f -name "*.pyc" -delete
-	@find . -type d -name "__pycache__" -exec rm -rf {} +
-	@rm -rf .pytest_cache .ruff_cache .mypy_cache build dist *.egg-info
-	@rm -rf $(VENV) $(PYTHON_CMD_FILE)
-	@echo "🔥 Removed $(VENV) environment."
+clean: ## Remove Python artifacts, caches, and the virtualenv
+	@echo Cleaning project...
+	-$(RMDIR) $(VENV)
+	-$(RMDIR) .pytest_cache
+	-$(RMDIR) .ruff_cache
+	@$(PYTHON) -c "$(ENVREF)CLEAN_SCRIPT"
+	@echo Clean complete.
 
-distclean: clean ## Alias for compatibility (clean already removes .venv)
-	@true
+distclean: clean ## Alias for clean
 
-# ====================================================================================
+# =============================================================================
 #  Internal Helper Targets
-# ====================================================================================
+# =============================================================================
 
-# Cross-platform: verify a Python 3.11 command exists.
-# If not, run the installer, then re-check. On Windows this will also accept "py -3.11".
+# Split the implementation per-OS to avoid bash-isms on Windows PowerShell 5.x
+ifeq ($(OS),Windows_NT)
 check-python:
-	@set -e; \
-	echo "🔎 Resolving a Python that satisfies >=3.11,<3.12 (i.e., 3.11.x)"; \
-	resolve() { \
-	  for c in "$(PYTHON)" python3.11 python3 python; do \
-	    [ -n "$$c" ] || continue; \
-	    if command -v $$c >/dev/null 2>&1 && $$c -c 'import sys; v=sys.version_info; raise SystemExit(0 if (v[0]==3 and v[1]==11) else 1)'; then \
-	      echo $$c; return 0; \
-	    fi; \
-	  done; \
-	  if command -v py >/dev/null 2>&1 && py -3.11 -c "import sys" >/dev/null 2>&1; then \
-	    echo "py -3.11"; return 0; \
-	  fi; \
-	  return 1; \
-	}; \
-	if ! CMD="$$(resolve)"; then \
-	  echo "❗ Python 3.11 not found. Running installer: scripts/install.sh"; \
-	  bash scripts/install.sh; \
-	  CMD="$$(resolve)" || { echo "❌ Still no Python 3.11 after installation."; exit 1; }; \
-	fi; \
-	echo "$$CMD" > "$(PYTHON_CMD_FILE)"; \
-	echo "✅ Using Python command: $$CMD"; \
-	$$CMD -V
+	@echo Checking for a Python 3.11 interpreter...
+	@& $(PYTHON) -c "import sys; sys.exit(0 if sys.version_info[:2]==(3,11) else 1)" 2> $(NULL_DEVICE); if ($$LASTEXITCODE -ne 0) { \
+		echo "Error: '$(PYTHON)' is not Python 3.11."; \
+		echo "Please install Python 3.11 and add it to your PATH,"; \
+		echo 'or specify the command via make install PYTHON="py -3.11"'; \
+		exit 1; \
+	}
+	@echo Found Python 3.11:
+	@& $(PYTHON) -V
+else
+check-python:
+	@echo Checking for a Python 3.11 interpreter...
+	@$(PYTHON) -c "import sys; sys.exit(0 if sys.version_info[:2]==(3,11) else 1)" 2>$(NULL_DEVICE) || ( \
+		echo "Error: '$(PYTHON)' is not Python 3.11."; \
+		echo "Please install Python 3.11 and add it to your PATH,"; \
+		echo 'or specify the command via make install PYTHON="py -3.11"'; \
+		exit 1; \
+	)
+	@echo Found Python 3.11:
+	@$(PYTHON) -V
+endif
 
 check-pyproject:
-	@test -f pyproject.toml || { echo "❌ pyproject.toml not found in this directory."; exit 1; }
+	@$(PYTHON) -c "import os,sys; sys.exit(0 if os.path.exists('pyproject.toml') else 1)" || ( \
+		echo "Error: pyproject.toml not found in this directory."; \
+		exit 1; \
+	)
