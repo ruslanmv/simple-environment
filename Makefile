@@ -54,9 +54,9 @@ DOCKER_IMAGE ?= simple-env:latest
 DOCKER_NAME  ?= simple-env
 DOCKER_PORT  ?= 8888
 
-.PHONY: help venv install dev update test lint fmt check shell clean distclean \
+.PHONY: help venv install dev uv-install update test lint fmt check shell clean distclean \
         clean-venv build-container run-container stop-container remove-container logs \
-        check-python check-pyproject python-version
+        check-python check-pyproject check-uv python-version
 
 # =============================================================================
 #  Helper Scripts (exported env vars; expanded by the shell)
@@ -133,6 +133,16 @@ install: venv check-pyproject ## Install project in non-editable mode
 dev: venv check-pyproject ## Install project in editable mode with dev dependencies
 	@$(PIP_EXE) install -e ".[dev]"
 	@echo "✅ Dev environment ready in $(VENV)"
+
+uv-install: check-uv check-pyproject ## [⚡️uv] Create venv & install deps from pyproject.toml
+	@echo "⚡️ Creating environment and syncing dependencies with uv..."
+	@uv sync
+	@echo "✅ Done! To activate the environment, run:"
+ifeq ($(OS),Windows_NT)
+	@echo "  .\\$(VENV)\\Scripts\\Activate.ps1"
+else
+	@echo "  source $(VENV)/bin/activate"
+endif
 
 update: venv check-pyproject ## Upgrade project and its dependencies
 	@$(PIP_EXE) install --upgrade -e ".[dev]"
@@ -244,6 +254,13 @@ check-pyproject:
 		echo "Error: pyproject.toml not found in this directory."; \
 		exit 1; \
 	}
+
+check-uv:
+	@Get-Command uv -ErrorAction SilentlyContinue > $(NULL_DEVICE); if ($$LASTEXITCODE -ne 0) { \
+		echo "Error: 'uv' command not found."; \
+		echo "Please install uv: irm https://astral.sh/uv/install.ps1 | iex"; \
+		exit 1; \
+	}
 else
 check-python:
 	@echo "Checking for a Python 3.11 interpreter..."
@@ -259,6 +276,13 @@ check-python:
 check-pyproject:
 	@$(PYTHON) -c "import os,sys; sys.exit(0 if os.path.exists('pyproject.toml') else 1)" || ( \
 		echo "Error: pyproject.toml not found in this directory."; \
+		exit 1; \
+	)
+
+check-uv:
+	@command -v uv >$(NULL_DEVICE) 2>&1 || ( \
+		echo "Error: 'uv' command not found."; \
+		echo "Please install uv: curl -LsSf https://astral.sh/uv/install.sh | sh"; \
 		exit 1; \
 	)
 endif
