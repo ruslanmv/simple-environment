@@ -13,7 +13,7 @@ VENV   ?= .venv
 
 # --- OS Detection for Paths and Commands ---
 ifeq ($(OS),Windows_NT)
-# Use the Python launcher on Windows (minor fix)
+# Use the Python launcher on Windows
 PYTHON         := py -3.11
 # Windows settings (PowerShell-safe)
 PY_SUFFIX      := .exe
@@ -55,7 +55,7 @@ DOCKER_NAME  ?= simple-env
 DOCKER_PORT  ?= 8888
 
 .PHONY: help venv install dev update test lint fmt check shell clean distclean \
-        build-container run-container stop-container remove-container logs \
+        clean-venv build-container run-container stop-container remove-container logs \
         check-python check-pyproject python-version
 
 # =============================================================================
@@ -98,42 +98,58 @@ endef
 # =============================================================================
 
 help: ## Show this help message
+ifeq ($(OS),Windows_NT)
+	@& $(PYTHON) -X utf8 -c "$(ENVREF)HELP_SCRIPT"
+else
 	@$(PYTHON) -X utf8 -c "$(ENVREF)HELP_SCRIPT"
+endif
 
 # --- Local Python Environment ---
 
+# Robust venv creation: handle Windows file locks (python.exe), AV/OneDrive, etc.
+ifeq ($(OS),Windows_NT)
 $(VENV): check-python
-	@echo Creating virtual environment in $(VENV)...
-	@$(PYTHON) -m venv $(VENV)
-	@$(PY_EXE) -m pip install --upgrade pip
-	@echo Created $(VENV) with $$($(PY_EXE) -V)
+	@echo "Creating virtual environment at $(VENV)…"
+	# Kill any running python and hard-delete locked venv (if present)
+	@powershell -NoProfile -Command "taskkill /F /IM python.exe 2>$$null; Start-Sleep -Milliseconds 300; if (Test-Path '$(VENV)'){ Remove-Item -Recurse -Force '$(VENV)' -ErrorAction SilentlyContinue; Start-Sleep -Milliseconds 200 }"
+	# Create venv with the launcher, then upgrade pip
+	@& $(PYTHON) -m venv '$(VENV)'
+	@& '$(VENV)\Scripts\python.exe' -m pip install --upgrade pip
+	@& '$(VENV)\Scripts\python.exe' -V | % { "✅ Created $(VENV) with $$_" }
+else
+$(VENV): check-python
+	@echo "Creating virtual environment at $(VENV)…"
+	@$(PYTHON) -m venv --clear "$(VENV)" || { rm -rf "$(VENV)"; $(PYTHON) -m venv "$(VENV)"; }
+	@"$(VENV)/bin/python" -m pip install --upgrade pip
+	@echo "✅ Created $(VENV) with $$("$(VENV)/bin/python" -V)"
+endif
 
 venv: $(VENV) ## Create the virtual environment if it does not exist
 
 install: venv check-pyproject ## Install project in non-editable mode
 	@$(PIP_EXE) install .
-	@echo Installed project into $(VENV)
+	@echo "✅ Installed project into $(VENV)"
 
 dev: venv check-pyproject ## Install project in editable mode with dev dependencies
 	@$(PIP_EXE) install -e ".[dev]"
-	@echo Dev environment ready in $(VENV)
+	@echo "✅ Dev environment ready in $(VENV)"
 
 update: venv check-pyproject ## Upgrade project and its dependencies
 	@$(PIP_EXE) install --upgrade -e ".[dev]"
-	@echo Project and dependencies upgraded
+	@echo "✅ Project and dependencies upgraded"
 
 # --- Development & QA ---
 
 test: venv ## Run tests with pytest
-	@echo Running tests...
+	@echo "🧪 Running tests..."
 	@$(PY_EXE) -m pytest
 
 lint: venv ## Check code style with ruff
-	@echo Linting with ruff...
+	@echo "🔍 Linting with ruff..."
 	@$(PY_EXE) -m ruff check .
 
 fmt: venv ## Format code with ruff
-	@echo Formatting with ruff...
+	@echo "🎨 Formatting with ruff..."
 	@$(PY_EXE) -m ruff format .
 
 check: lint test ## Run all checks (linting and testing)
@@ -141,14 +157,13 @@ check: lint test ## Run all checks (linting and testing)
 # --- Docker (optional helpers) ---
 
 build-container: check-pyproject ## Build the Docker image
-	@echo Building image '$(DOCKER_IMAGE)'...
+	@echo "Building image '$(DOCKER_IMAGE)'..."
 	@docker build -t $(DOCKER_IMAGE) .
 
-# Windows-safe fallback (PowerShell 5): run, and if it fails, start
 ifeq ($(OS),Windows_NT)
 run-container: ## Run or restart the container in detached mode
 	@docker run -d --name $(DOCKER_NAME) -p $(DOCKER_PORT):8888 -v $(MOUNT_SRC):/workspace $(DOCKER_IMAGE) > $(NULL_DEVICE) 2> $(NULL_DEVICE); if ($$LASTEXITCODE -ne 0) { docker start $(DOCKER_NAME) > $(NULL_DEVICE) 2> $(NULL_DEVICE) }
-	@echo Container is up at http://localhost:$(DOCKER_PORT)
+	@echo "Container is up at http://localhost:$(DOCKER_PORT)"
 
 stop-container: ## Stop the running container
 	@docker stop $(DOCKER_NAME) > $(NULL_DEVICE) 2> $(NULL_DEVICE); if ($$LASTEXITCODE -ne 0) { echo "Info: container was not running." }
@@ -158,7 +173,7 @@ remove-container: stop-container ## Stop and remove the container
 else
 run-container: ## Run or restart the container in detached mode
 	@docker run -d --name $(DOCKER_NAME) -p $(DOCKER_PORT):8888 -v $(MOUNT_SRC):/workspace $(DOCKER_IMAGE) > $(NULL_DEVICE) || docker start $(DOCKER_NAME)
-	@echo Container is up at http://localhost:$(DOCKER_PORT)
+	@echo "Container is up at http://localhost:$(DOCKER_PORT)"
 
 stop-container: ## Stop the running container
 	@docker stop $(DOCKER_NAME) >$(NULL_DEVICE) 2>&1 || echo "Info: container was not running."
@@ -173,22 +188,38 @@ logs: ## View the container logs (Ctrl-C to exit)
 # --- Utility ---
 
 python-version: check-python ## Show resolved Python interpreter and version
-	@echo Using: $(PYTHON)
+ifeq ($(OS),Windows_NT)
+	@echo "Using: $(PYTHON)"
+	@& $(PYTHON) -V
+else
+	@echo "Using: $(PYTHON)"
 	@$(PYTHON) -V
+endif
 
 shell: venv ## Show how to activate the virtual environment shell
-	@echo Virtual environment is ready.
-	@echo To activate it, run:
+	@echo "Virtual environment is ready."
+	@echo "To activate it, run:"
 	@echo "  On Windows (CMD/PowerShell): .\\$(subst /,\,$(ACTIVATE))"
 	@echo "  On Unix (Linux/macOS/Git Bash): $(ACTIVATE)"
 
+clean-venv: ## Force-remove the venv (kills python.exe on Windows)
+ifeq ($(OS),Windows_NT)
+	@powershell -NoProfile -Command "taskkill /F /IM python.exe 2>$$null; Start-Sleep -Milliseconds 300; if (Test-Path '.venv'){ Remove-Item -Recurse -Force '.venv' }"
+else
+	@rm -rf .venv
+endif
+
 clean: ## Remove Python artifacts, caches, and the virtualenv
-	@echo Cleaning project...
+	@echo "Cleaning project..."
 	-$(RMDIR) $(VENV)
 	-$(RMDIR) .pytest_cache
 	-$(RMDIR) .ruff_cache
+ifeq ($(OS),Windows_NT)
+	@& $(PYTHON) -c "$(ENVREF)CLEAN_SCRIPT"
+else
 	@$(PYTHON) -c "$(ENVREF)CLEAN_SCRIPT"
-	@echo Clean complete.
+endif
+	@echo "Clean complete."
 
 distclean: clean ## Alias for clean
 
@@ -196,17 +227,16 @@ distclean: clean ## Alias for clean
 #  Internal Helper Targets
 # =============================================================================
 
-# Split the implementation per-OS to avoid bash-isms on Windows PowerShell 5.x
 ifeq ($(OS),Windows_NT)
 check-python:
-	@echo Checking for a Python 3.11 interpreter...
+	@echo "Checking for a Python 3.11 interpreter..."
 	@& $(PYTHON) -c "import sys; sys.exit(0 if sys.version_info[:2]==(3,11) else 1)" 2> $(NULL_DEVICE); if ($$LASTEXITCODE -ne 0) { \
 		echo "Error: '$(PYTHON)' is not Python 3.11."; \
 		echo "Please install Python 3.11 and add it to your PATH,"; \
-		echo 'or specify the command via make install PYTHON="py -3.11"'; \
+		echo 'or specify the command via make install PYTHON=\"py -3.11\"'; \
 		exit 1; \
 	}
-	@echo Found Python 3.11:
+	@echo "Found Python 3.11:"
 	@& $(PYTHON) -V
 
 check-pyproject:
@@ -216,14 +246,14 @@ check-pyproject:
 	}
 else
 check-python:
-	@echo Checking for a Python 3.11 interpreter...
+	@echo "Checking for a Python 3.11 interpreter..."
 	@$(PYTHON) -c "import sys; sys.exit(0 if sys.version_info[:2]==(3,11) else 1)" 2>$(NULL_DEVICE) || ( \
 		echo "Error: '$(PYTHON)' is not Python 3.11."; \
 		echo "Please install Python 3.11 and add it to your PATH,"; \
-		echo 'or specify the command via make install PYTHON="py -3.11"'; \
+		echo 'or specify the command via make install PYTHON=\"py -3.11\"'; \
 		exit 1; \
 	)
-	@echo Found Python 3.11:
+	@echo "Found Python 3.11:"
 	@$(PYTHON) -V
 
 check-pyproject:
