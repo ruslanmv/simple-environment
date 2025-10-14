@@ -10,8 +10,6 @@ requires-python = ">=3.11,<3.12"
 dependencies = [
   "notebook",
   "ipykernel",
-  "gensim",
-  "nltk"
 ]
 
 # 🚫 Prevent setuptools from auto-finding packages like 'backup' or 'extra'
