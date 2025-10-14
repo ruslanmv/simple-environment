@@ -13,6 +13,8 @@ VENV   ?= .venv
 
 # --- OS Detection for Paths and Commands ---
 ifeq ($(OS),Windows_NT)
+# Use the Python launcher on Windows (minor fix)
+PYTHON         := py -3.11
 # Windows settings (PowerShell-safe)
 PY_SUFFIX      := .exe
 BIN_DIR        := Scripts
