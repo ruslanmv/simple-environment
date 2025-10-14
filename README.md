@@ -256,6 +256,8 @@ python3.11 --version
 ```
 
 ### Windows
+### Windows
+
 **Which terminal should I open?**
 
 * **PowerShell (regular / non-Admin):** Start → type “PowerShell” → open **Windows PowerShell** (do **not** click “Run as administrator”).
@@ -335,6 +337,7 @@ python3.11 --version
 
    *(If `py` isn’t found in Git Bash, try `PYTHON="python"` or `PYTHON="/c/Windows/py.exe -3.11"`.)*
 
+</details>
 
 ---
 
