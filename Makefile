@@ -65,8 +65,8 @@ DOCKER_PORT  ?= 8888
 export HELP_SCRIPT
 define HELP_SCRIPT
 import re, sys, io
-print('Usage: make <target> [OPTIONS...]\\n')
-print('Available targets:\\n')
+print('Usage: make <target> [OPTIONS...]\n')
+print('Available targets:\n')
 mf = '$(firstword $(MAKEFILE_LIST))'
 with io.open(mf, 'r', encoding='utf-8', errors='ignore') as f:
 	for line in f:
@@ -106,14 +106,13 @@ endif
 
 # --- Local Python Environment ---
 
-# Robust venv creation: handle Windows file locks (python.exe), AV/OneDrive, etc.
 ifeq ($(OS),Windows_NT)
 $(VENV): check-python
-	@echo "Creating virtual environment at $(VENV)…"
+	@Write-Host 'Creating virtual environment at $(VENV)...'
 	@powershell -NoProfile -Command "taskkill /F /IM python.exe 2>$$null; Start-Sleep -Milliseconds 300; if (Test-Path '$(VENV)'){ Remove-Item -Recurse -Force '$(VENV)' -ErrorAction SilentlyContinue; Start-Sleep -Milliseconds 200 }"
 	@& $(PYTHON) -m venv '$(VENV)'
 	@& '$(VENV)\Scripts\python.exe' -m pip install --upgrade pip
-	@& '$(VENV)\Scripts\python.exe' -V | % { "✅ Created $(VENV) with $$_" }
+	@& '$(VENV)\Scripts\python.exe' -V | %% { Write-Host ('Created $(VENV) with ' + $$_.ToString()) }
 else
 $(VENV): check-python
 	@echo "Creating virtual environment at $(VENV)…"
@@ -132,13 +131,15 @@ dev: venv check-pyproject ## Install project in editable mode with dev dependenc
 	@$(PIP_EXE) install -e ".[dev]"
 	@echo "✅ Dev environment ready in $(VENV)"
 
-uv-install: check-uv check-pyproject ## [⚡️uv] Create venv & install deps from pyproject.toml
-	@echo "⚡️ Creating environment and syncing dependencies with uv..."
+uv-install: check-uv check-pyproject ## [uv] Create venv & install deps from pyproject.toml
+	@Write-Host 'Syncing environment with uv...'
+ifeq ($(OS),Windows_NT)
+	@if (Get-Command uv -ErrorAction SilentlyContinue) { uv sync } else { $$candidate = Join-Path $$env:USERPROFILE '.local\bin\uv.exe'; if (Test-Path $$candidate) { & $$candidate sync } else { Write-Host 'Error: uv not found after installation.'; exit 1 } }
+	@Write-Host 'Done! To activate the environment, run:'
+	@Write-Host '  .\$(VENV)\Scripts\Activate.ps1'
+else
 	@uv sync
 	@echo "✅ Done! To activate the environment, run:"
-ifeq ($(OS),Windows_NT)
-	@echo "  .\\$(VENV)\\Scripts\\Activate.ps1"
-else
 	@echo "  source $(VENV)/bin/activate"
 endif
 
@@ -171,13 +172,13 @@ build-container: check-pyproject ## Build the Docker image
 ifeq ($(OS),Windows_NT)
 run-container: ## Run or restart the container in detached mode
 	@docker run -d --name $(DOCKER_NAME) -p $(DOCKER_PORT):8888 -v $(MOUNT_SRC):/workspace $(DOCKER_IMAGE) > $(NULL_DEVICE) 2> $(NULL_DEVICE); if ($$LASTEXITCODE -ne 0) { docker start $(DOCKER_NAME) > $(NULL_DEVICE) 2> $(NULL_DEVICE) }
-	@echo "Container is up at http://localhost:$(DOCKER_PORT)"
+	@Write-Host ('Container is up at http://localhost:' + '$(DOCKER_PORT)')
 
 stop-container: ## Stop the running container
-	@docker stop $(DOCKER_NAME) > $(NULL_DEVICE) 2> $(NULL_DEVICE); if ($$LASTEXITCODE -ne 0) { echo "Info: container was not running." }
+	@docker stop $(DOCKER_NAME) > $(NULL_DEVICE) 2> $(NULL_DEVICE); if ($$LASTEXITCODE -ne 0) { Write-Host 'Info: container was not running.' }
 
 remove-container: stop-container ## Stop and remove the container
-	@docker rm $(DOCKER_NAME) > $(NULL_DEVICE) 2> $(NULL_DEVICE); if ($$LASTEXITCODE -ne 0) { echo "Info: container did not exist." }
+	@docker rm $(DOCKER_NAME) > $(NULL_DEVICE) 2> $(NULL_DEVICE); if ($$LASTEXITCODE -ne 0) { Write-Host 'Info: container did not exist.' }
 else
 run-container: ## Run or restart the container in detached mode
 	@docker run -d --name $(DOCKER_NAME) -p $(DOCKER_PORT):8888 -v $(MOUNT_SRC):/workspace $(DOCKER_IMAGE) > $(NULL_DEVICE) || docker start $(DOCKER_NAME)
@@ -197,7 +198,7 @@ logs: ## View the container logs (Ctrl-C to exit)
 
 python-version: check-python ## Show resolved Python interpreter and version
 ifeq ($(OS),Windows_NT)
-	@echo "Using: $(PYTHON)"
+	@Write-Host ('Using: ' + '$(PYTHON)')
 	@& $(PYTHON) -V
 else
 	@echo "Using: $(PYTHON)"
@@ -212,9 +213,9 @@ shell: venv ## Show how to activate the virtual environment shell
 
 clean-venv: ## Force-remove the venv (kills python.exe on Windows)
 ifeq ($(OS),Windows_NT)
-	@powershell -NoProfile -Command "taskkill /F /IM python.exe 2>$$null; Start-Sleep -Milliseconds 300; if (Test-Path '.venv'){ Remove-Item -Recurse -Force '.venv' }"
+	@powershell -NoProfile -Command "taskkill /F /IM python.exe 2>$$null; Start-Sleep -Milliseconds 300; if (Test-Path '$(VENV)'){ Remove-Item -Recurse -Force '$(VENV)' }"
 else
-	@rm -rf .venv
+	@rm -rf "$(VENV)"
 endif
 
 clean: ## Remove Python artifacts, caches, and the virtualenv
@@ -237,18 +238,20 @@ distclean: clean ## Alias for clean
 
 ifeq ($(OS),Windows_NT)
 check-python:
-	@echo "Checking for a Python 3.11 interpreter..."
-	@& $(PYTHON) -c "import sys; sys.exit(0 if sys.version_info[:2]==(3,11) else 1)" 2> $(NULL_DEVICE); if ($$LASTEXITCODE -ne 0) { echo "Error: '$(PYTHON)' is not Python 3.11."; echo "Please install Python 3.11 and add it to your PATH,"; echo 'or specify the command via make install PYTHON=\"py -3.11\"'; exit 1; }
-	@echo "Found Python 3.11:"
+	@Write-Host 'Checking for a Python 3.11 interpreter...'
+	@& $(PYTHON) -c 'import sys; sys.exit(0 if sys.version_info[:2]==(3,11) else 1)' 2> $(NULL_DEVICE); if ($$LASTEXITCODE -ne 0) { Write-Host ('Error: ''$(PYTHON)'' is not Python 3.11.'); Write-Host 'Please install Python 3.11 and add it to your PATH,'; Write-Host 'or specify via: make install PYTHON=py -3.11'; exit 1; }
+	@Write-Host 'Found Python 3.11:'
 	@& $(PYTHON) -V
 
+# Use native file check on Windows to avoid quoting/CWD pitfalls
 check-pyproject:
-	@& $(PYTHON) -c "import os,sys; sys.exit(0 if os.path.exists('pyproject.toml') else 1)" 2> $(NULL_DEVICE); if ($$LASTEXITCODE -ne 0) { echo "Error: pyproject.toml not found in this directory."; exit 1; }
+	@if (Test-Path -LiteralPath 'pyproject.toml') { Write-Host 'Found pyproject.toml' } else { Write-Host ('Error: pyproject.toml not found in ' + (Get-Location)); exit 1 }
 
-check-uv: ## Check for uv and install it if missing
-	@echo "Checking for uv..."
-	@Get-Command uv -ErrorAction SilentlyContinue > $(NULL_DEVICE); if ($$LASTEXITCODE -ne 0) { echo "Info: 'uv' not found. Attempting to install it now..."; irm https://astral.sh/uv/install.ps1 | iex; }
-	@echo "✅ uv is available."
+check-uv: ## Check for uv and install it if missing (adds to PATH for current session)
+	@Write-Host 'Checking for uv...'
+	@$$cmd = Get-Command uv -ErrorAction SilentlyContinue; if (-not $$cmd) { Write-Host 'Info: ''uv'' not found. Attempting to install it now...'; iwr https://astral.sh/uv/install.ps1 -UseBasicParsing | iex; $$localBin = Join-Path $$env:USERPROFILE '.local\bin'; if (Test-Path $$localBin) { $$env:Path = "$$localBin;$$env:Path" } }
+	@$$cmd = Get-Command uv -ErrorAction SilentlyContinue; if (-not $$cmd) { $$candidate = Join-Path $$env:USERPROFILE '.local\bin\uv.exe'; if (Test-Path $$candidate) { Write-Host ('Using ' + $$candidate); $$env:Path = (Split-Path $$candidate) + ';' + $$env:Path } else { Write-Host 'Error: ''uv'' is still not available after installation.'; exit 1 } }
+	@Write-Host 'uv is available.'
 else
 check-python:
 	@echo "Checking for a Python 3.11 interpreter..."
@@ -261,17 +264,20 @@ check-python:
 	@echo "Found Python 3.11:"
 	@$(PYTHON) -V
 
+# Use native file check on POSIX
 check-pyproject:
-	@$(PYTHON) -c "import os,sys; sys.exit(0 if os.path.exists('pyproject.toml') else 1)" || ( \
-		echo "Error: pyproject.toml not found in this directory."; \
-		exit 1; \
-	)
+	@[ -f pyproject.toml ] || { echo "Error: pyproject.toml not found in $$(pwd)"; exit 1; }
+	@echo "Found pyproject.toml"
 
 check-uv: ## Check for uv and install it if missing
 	@echo "Checking for uv..."
 	@command -v uv >$(NULL_DEVICE) 2>&1 || ( \
 		echo "Info: 'uv' not found. Attempting to install it now..."; \
 		curl -LsSf https://astral.sh/uv/install.sh | sh; \
+	)
+	@command -v uv >$(NULL_DEVICE) 2>&1 || ( \
+		echo "Error: 'uv' is still not available after installation."; \
+		exit 1; \
 	)
 	@echo "✅ uv is available."
 endif
