@@ -112,6 +112,44 @@ Use this method if you prefer to manage a Python virtual environment directly on
 -   `make clean`: Remove build artifacts and the `.venv` directory.
 
 ---
+## 🐳 Option 3: Remote Docker (prebuilt images)
+
+## How to pull & run
+
+### Pull the main image
+**Docker Hub**
+```bash
+docker pull docker.io/ruslanmv/simple-environment:latest
+```
+
+**GHCR**
+```bash
+docker pull ghcr.io/ruslanmv/simple-environment:latest
+```
+
+### Pull the UV variant (from `uv-version` branch)
+**Docker Hub**
+```bash
+docker pull docker.io/ruslanmv/simple-environment:uv
+```
+
+**GHCR**
+```bash
+docker pull ghcr.io/ruslanmv/simple-environment:uv
+```
+
+### Run Jupyter (development)
+```bash
+# Map host port 8888 -> container 8888 and mount current dir into /work (optional)
+docker run --rm -it -p 8888:8888 -v "$PWD":/work   docker.io/ruslanmv/simple-environment:v0.1.0
+# then open http://localhost:8888
+```
+
+### Quick sanity check (CLI)
+```bash
+docker run --rm docker.io/ruslanmv/simple-environment:v0.1.0 python --version
+docker run --rm docker.io/ruslanmv/simple-environment:v0.1.0 jupyter --version
+```
 
 ## 🚀 Usage and Customization
 
